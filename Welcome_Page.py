@@ -1,6 +1,8 @@
 from tkinter import *
 from PIL import ImageTk  # to install this module, write this code in the python terminal --> pip install pillow
 
+#Issue with the toggle button
+
 root = Tk()
 root.title("The WOK- Admin or Customer")
 root.geometry("1920x1080+0+0")
