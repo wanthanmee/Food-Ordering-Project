@@ -3,6 +3,7 @@ import tkinter.messagebox as messagebox
 from tkinter import Tk, StringVar, Toplevel, Frame, Label, Entry, Button, Menu
 from tkinter import *
 
+
 root = Tk()
 root.title("The WOK - Chinese Restaurant")
 root.geometry("1920x1080+0+0")  # window size and position
@@ -40,6 +41,7 @@ def Database():  # creating connection to database and creating table
 def switchWelcomePage():
     root.destroy()
     import Welcome_Page
+
 
 def Exit():
     result = messagebox.askquestion('System', 'Are you sure you want to exit?', icon="warning")
