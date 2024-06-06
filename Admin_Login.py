@@ -47,7 +47,7 @@ def Exit():
     if result == 'yes':
         root.destroy()
 
-
+#Will delete Home function later. 
 def Home():
     global HomeFrame
     HomeFrame = Frame(root)
