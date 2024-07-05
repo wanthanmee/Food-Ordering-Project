@@ -1,0 +1,1681 @@
+#import tkinter as tk
+from tkinter import *
+from tkinter import ttk
+from tkinter import filedialog
+#from PIL import ImageTk, Image
+from tkinter import PhotoImage
+from tkinter import messagebox
+import sqlite3
+import requests
+import json
+
+APIBaseURL = "https://api.dify.ai/v1"
+conn = sqlite3.connect('db_thewok1.db')
+cursor = conn.cursor()
+
+
+
+# Create connection to Database
+def Database():
+   global conn, cursor
+   conn = sqlite3.connect('db_thewok1.db')
+   cursor = conn.cursor()
+   cursor.execute("""
+       CREATE TABLE IF NOT EXISTS items(
+       item_id TEXT PRIMARY KEY,
+       item_name TEXT NOT NULL,
+       item_category TEXT NOT NULL,
+       item_description TEXT NOT NULL,
+       item_price  REAL NOT NULL,
+       item_calories REAL NOT NULL,
+       item_image_path TEXT NOT NULL
+       )
+   """)
+   cursor.execute("""
+       CREATE TABLE IF NOT EXISTS item_category_sequences(
+       item_category TEXT PRIMARY KEY,
+       current_id INTEGER NOT NULL
+       )
+   """)
+   conn.commit()
+
+
+Database()
+
+
+root= Tk()
+root.title("The WOK- Admin Panel")
+root.geometry('1980x1080')
+root.attributes("-fullscreen",True)
+
+
+def food_Dash():
+
+
+   '''
+   def getitemfromdatabase():
+       cursor.execute("SELECT * FROM items")
+       items = cursor.fetchall()
+       conn.commit()
+       print(items)
+       for item in items:
+           trv.insert('', END, values=item)
+   '''
+   #---------------------------------------------------------------
+   # Function: getAllFoodItems()
+   # Desc: Fetch records from table 'items'
+   # ---------------------------------------------------------------
+   def getAllFoodItems():
+       cursor.execute("SELECT * FROM items")
+       return cursor.fetchall()
+
+
+   # Function to generate the next item_id
+   def generate_item_id(item_category):
+       cursor.execute("SELECT current_id FROM item_category_sequences WHERE item_category=?", (item_category,))
+       row = cursor.fetchone()
+       if row is None:
+           cursor.execute("INSERT INTO item_category_sequences (item_category, current_id) VALUES (?, ?)", (item_category, 1))
+           new_id = 1
+       else:
+           new_id = row[0] + 1
+           cursor.execute("UPDATE item_category_sequences SET current_id=? WHERE item_category=?", (new_id, item_category))
+       conn.commit()
+       prefix = 'F' if item_category.lower() == 'food' else 'D'
+       return f"{prefix}{new_id}"
+
+
+   # Create Variables
+   ADMIN_F_item_name = StringVar()
+   ADMIN_F_item_category = StringVar()
+   ADMIN_F_DESC = StringVar()
+   ADMIN_F_item_price  = DoubleVar()
+   ADMIN_F_item_calories = DoubleVar()
+   ADMIN_F_IMAGE = StringVar()
+
+
+   foodDash_frame = Frame(main_frame)
+   #foodDash_frame.configure(bg='yellow')
+   frame_btns = Frame(foodDash_frame)
+   #frame_btns.configure(bg='pink')
+   frame_btns_nav = Frame(foodDash_frame)
+   #frame_btns_nav.configure(bg='red')
+
+
+   # Design Food Entry Form
+   categories = ['Food', 'Drinks']
+   ADMIN_F_item_category.set(categories[0])
+
+
+   item_name_label = Label(foodDash_frame, text="Name:", font=('Verdana', 15, 'bold'))
+   item_name_entry = Entry(foodDash_frame, font=('Verdana', 15), textvariable=ADMIN_F_item_name, width=22)
+
+
+   item_category_label = Label(foodDash_frame, text="Category:", font=('Verdana', 15, 'bold'))
+   item_category_combobox = ttk.Combobox(foodDash_frame, font=('Verdana', 15), textvariable=ADMIN_F_item_category, values=categories,
+                                    width=21)
+
+
+   item_description_label = Label(foodDash_frame, text="Description:", font=('Verdana', 15, 'bold'))
+   item_description_entry = Entry(foodDash_frame, font=('Verdana', 15), textvariable=ADMIN_F_DESC, width=22)
+
+
+   item_price_label = Label(foodDash_frame, text="Price :", font=('Verdana', 15, 'bold'))
+   item_price_entry = Entry(foodDash_frame, font=('Verdana', 15), textvariable=ADMIN_F_item_price , width=22)
+
+
+   item_calories_label = Label(foodDash_frame, text="Calories:", font=('Verdana', 15, 'bold'))
+   item_calories_entry = Entry(foodDash_frame, font=('Verdana', 15), textvariable=ADMIN_F_item_calories, width=22)
+
+
+   pic_label = Label(foodDash_frame, text="Picture", font=('Verdana', 15, 'bold'))
+   pic_entry = Entry(foodDash_frame, font=(15), textvariable=ADMIN_F_IMAGE, width=26)
+   display_pic_label = Label(foodDash_frame)
+   display_pic_label.config(bg='light grey')
+   button_browse_pic = Button(foodDash_frame, text="Select Image", font=('Verdana', 15, 'bold'), bg='#EEE3AD', fg='#A52A2A')
+
+
+   search_label = Label(foodDash_frame, text="Search by Name:", font=('Verdana', 15, 'bold'))
+   search_entry = Entry(foodDash_frame, font=('Verdana', 15))
+   button_trv_search = Button(foodDash_frame, text="Search", font=('Verdana', 15, 'bold'), bg='#EEE3AD', fg='#A52A2A')
+
+
+   button_trv_viewFood = Button(foodDash_frame, text="View All", font=('Verdana', 15, 'bold'), fg='#A52A2A', bg='#EEE3AD')
+
+
+   # Tree View - Display Product Details
+   trv = ttk.Treeview(foodDash_frame, columns=(1, 2, 3, 4, 5, 6, 7), show='headings')
+
+
+
+   style = ttk.Style()
+   style.configure("Treeview.Heading", font=('Verdana', 15, 'bold'), foreground='#A52A2A')
+   style.configure("Treeview", font=('Verdana', 13))  # Row font size
+
+
+   trv.column(1, anchor='s', stretch=NO, width=100)
+   trv.column(2, anchor='s', stretch=NO, width=200)
+   trv.column(3, anchor='s', stretch=NO, width=200)
+   trv.column(4, anchor='s', stretch=NO, width=300)
+   trv.column(5, anchor='s', stretch=NO, width=100)
+   trv.column(6, anchor='s', stretch=NO, width=100)
+   trv.column(7, anchor='s', stretch=NO, width=820)
+
+
+   trv.heading(1, text='ID')
+   trv.heading(2, text='Name')
+   trv.heading(3, text='Category')
+   trv.heading(4, text='Description')
+   trv.heading(5, text='Price')
+   trv.heading(6, text='Calories')
+   trv.heading(7, text='Image')
+
+
+   # Design Buttons
+   button_add = Button(frame_btns, text="Add Food", font=('Verdana', 15, 'bold'), fg='black', bg='#DFB498')
+   button_edit = Button(frame_btns, text="Update Food", font=('Verdana', 15, 'bold'), fg='black', bg='#DFB498')
+   button_remove = Button(frame_btns, text="Delete Food", font=('Verdana', 15, 'bold'), fg='black', bg='#DFB498')
+   button_clear = Button(frame_btns, text="Clear", font=('Verdana', 15, 'bold'), fg='black', bg="#DFB498")
+
+
+   button_first = Button(frame_btns_nav, text="<<", font=('verdana', 16, 'bold'), bg='#A52A2A', fg='#ffffff',
+                            width=5)
+   button_last = Button(frame_btns_nav, text=">>", font=('verdana', 16, 'bold'), bg='#A52A2A', fg='#ffffff',
+                           width=5)
+   button_next = Button(frame_btns_nav, text=">", font=('verdana', 16, 'bold'), bg='#A52A2A', fg='#ffffff', width=5)
+   button_previous = Button(frame_btns_nav, text="<", font=('verdana', 16, 'bold'), bg='#A52A2A', fg='#ffffff',
+                               width=5)
+
+
+   # Widget Arrangements
+   foodDash_frame.place(x=0, y=10, width=1880, height=1080)
+   #foodDash_frame.configure(bg='pink')
+
+
+   item_name_label.place(x=30, y=120)
+   item_name_entry.place(x=250, y=120)
+
+
+   item_category_label.place(x=30, y=160)
+   item_category_combobox.place(x=250, y=160)
+
+
+   item_description_label.place(x=30, y=200)
+   item_description_entry.place(x=250, y=200)
+
+
+   item_price_label.place(x=30, y=240)
+   item_price_entry.place(x=250, y=240)
+
+
+   item_calories_label.place(x=30, y=280)
+   item_calories_entry.place(x=250, y=280)
+
+
+   pic_label.place(x=30, y=320)
+   pic_entry.place(x=250, y=320)
+   display_pic_label.place(x=20, y=360, width=520, height=300)
+   button_browse_pic.place(x=180, y=680, width=200, height=30)
+
+
+   search_label.place(x=600, y=120)
+   search_entry.place(x=800, y=120)
+   button_trv_search.place(x=1080, y=120, width=150, height=30)
+   button_trv_viewFood.place(x=1250, y=119, width=150, height=30)
+
+
+   trv.place(x=600, y=160, width=1300, height=600)
+   sb_vertical = Scrollbar(foodDash_frame, orient=VERTICAL, command=trv.yview)
+   trv.config(yscrollcommand=sb_vertical.set)
+   #sb_vertical.place(x=1865, y=160, height=600)
+   sb_vertical.place(x=1865, y=160, height=600)
+   sb_horizontal = Scrollbar(foodDash_frame, orient=HORIZONTAL, command=trv.xview)
+   trv.config(xscrollcommand=sb_horizontal.set)
+   #sb_horizontal.place(x=600, y=750, width=1265)  # Adjusted width to fit inside the frame
+   sb_horizontal.place(x=600, y=760, width=1400)
+
+
+   frame_btns.place(x=20, y=720, width=600, height=200)
+   button_add.place(x=0, y=10, width=150, height=30)
+   button_edit.place(x=150, y=10, width=150, height=30)
+   button_remove.place(x=300, y=10, width=150, height=30)
+   button_clear.place(x=450, y=10, width=150, height=30)
+
+
+   frame_btns_nav.place(x=600, y=770, width=1200, height=100)
+   button_first.pack(side=LEFT, padx=5, pady=10)
+   button_previous.pack(side=LEFT, padx=5, pady=10)
+   button_next.pack(side=LEFT, padx=5, pady=10)
+   button_last.pack(side=LEFT, padx=5, pady=10)
+
+
+   def add_food_item():
+       item_name = ADMIN_F_item_name.get()
+       item_category = ADMIN_F_item_category.get()
+       item_description = ADMIN_F_DESC.get()
+       item_price  = round(ADMIN_F_item_price .get(),2)
+       item_calories = round(ADMIN_F_item_calories.get(),2)
+       item_image_path = ADMIN_F_IMAGE.get()
+
+
+       if not item_name or not item_category or not item_description or not item_price  or not item_calories or not item_image_path:
+           messagebox.showwarning("Input Error", "All fields are required.")
+           return
+
+
+       item_id = generate_item_id(item_category)
+       cursor.execute(
+           "INSERT INTO items (item_id, item_name, item_category, item_description, item_price , item_calories, item_image_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+           (item_id, item_name, item_category, item_description, item_price , item_calories, item_image_path))
+       conn.commit()
+
+
+       trv.insert("", "end", values=(item_id, item_name, item_category, item_description, item_price , item_calories, item_image_path))
+       clear_fields()
+
+   def insert_entry_box(event):
+       selected_item = trv.selection()
+       if selected_item:  # Check if an item is actually selected
+           item = trv.item(selected_item)
+           item_id = item["values"][0]
+
+           # Create a cursor from the connection
+           cursor = conn.cursor()
+
+           # Fetch data from database based on item_id
+           cursor.execute('SELECT * FROM items WHERE item_id = ?', (item_id,))
+           data = cursor.fetchone()
+
+           if data:
+               item_id, name, category, description, price, calories, image_path = data
+               ADMIN_F_item_name.set(name)
+               ADMIN_F_item_category.set(category)
+               ADMIN_F_DESC.set(description)
+               ADMIN_F_item_price.set(price)
+               ADMIN_F_item_calories.set(calories)
+               ADMIN_F_IMAGE.set(image_path)
+
+               # Update the image display
+               try:
+                   img = PhotoImage(file=image_path)
+                   img_resized = img.subsample(img.width() // 520, img.height() // 300)  # Resize as needed
+                   display_pic_label.config(image=img_resized)
+                   display_pic_label.image = img_resized
+               except Exception as e:
+                   print(f"Error loading image: {e}")
+                   display_pic_label.config(image='')
+           else:
+               print(f"No data found for item ID: {item_id}")
+
+           # Close the cursor after use
+           cursor.close()
+
+   # Bind the insert_entry_box function to the treeview selection event
+   trv.bind('<<TreeviewSelect>>', insert_entry_box)
+
+   def update_food_item():
+       selected_item = trv.selection()
+       if not selected_item:
+           messagebox.showwarning("Selection Error", "Select a food item to update.")
+           return
+
+
+       item = trv.item(selected_item)
+       item_id = item["values"][0]
+
+
+       item_name = ADMIN_F_item_name.get()
+       item_category = ADMIN_F_item_category.get()
+       item_description = ADMIN_F_DESC.get()
+       item_price  = round(ADMIN_F_item_price .get(),2)
+       item_calories = round(ADMIN_F_item_calories.get(),2)
+       item_image_path = ADMIN_F_IMAGE.get()
+
+
+       if not item_name or not item_category or not item_description or not item_price  or not item_calories or not item_image_path:
+           messagebox.showwarning("Input Error", "All fields are required.")
+           return
+
+
+
+       cursor.execute("""
+          UPDATE items
+          SET item_name=?, item_category=?, item_description=?, item_price =?, item_calories=?, item_image_path=?
+          WHERE item_id=?
+      """, (item_name, item_category, item_description, item_price , item_calories, item_image_path, item_id))
+       conn.commit()
+
+
+       trv.item(selected_item, values=(item_id, item_name, item_category, item_description, item_price , item_calories, item_image_path))
+       clear_fields()
+
+
+   def delete_food_item():
+       selected_item = trv.selection()
+       if not selected_item:
+           messagebox.showwarning("Selection Error", "Select a food item to delete.")
+           return
+
+       item = trv.item(selected_item)
+       item_id = item["values"][0]
+       cursor.execute('SELECT * FROM items WHERE item_id = ?', (item_id,))
+       data = cursor.fetchone()
+
+
+       if data:
+           item_id, name, category, description, price, calories, image_path = data
+           ADMIN_F_item_name.set(name)
+       result = messagebox.askquestion('System', f'Are you sure you want to delete {name}?', icon="warning")
+       if result == 'yes':
+
+           try:
+               cursor.execute("DELETE FROM items WHERE item_id=?", (item_id,))
+               conn.commit()
+
+               trv.delete(selected_item)
+               clear_fields()
+               messagebox.showinfo('Success',f'{name} has been deleted successfully.')
+           except Exception as e:
+               messagebox.showerror('Error',f'Error message: {e}.')
+
+   def clear_fields():
+       ADMIN_F_item_name.set("")
+       ADMIN_F_item_category.set(categories[0])
+       ADMIN_F_DESC.set("")
+       ADMIN_F_item_price .set(0.0)
+       ADMIN_F_item_calories.set(0.0)
+       ADMIN_F_IMAGE.set("")
+       display_pic_label.config(image='')
+
+   def load_image():
+       file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif")])
+       if file_path:
+           try:
+               ADMIN_F_IMAGE.set(file_path)
+
+               # Create PhotoImage object
+               img = PhotoImage(file=file_path)
+               img_width = img.width()
+               img_height = img.height()
+               if img_width >= 1280 and img_height >= 720:
+                   # Resize using subsample (integer scaling)
+                   img_resized = img.subsample(img.width() // 520, img.height() // 300) # Example: subsample by 2 in both dimensions
+
+                   # Update label in tkinter
+                   display_pic_label.config(image=img_resized)
+                   display_pic_label.image = img_resized  # Keep a reference to the image object
+               else:
+                   messagebox.showerror('Error','Please insert an image more than 1280x720 pixels.')
+                   ADMIN_F_IMAGE.set("")
+                   display_pic_label.config(image='')
+
+           except Exception as e:
+               messagebox.showerror("Error", f"Error loading image: {e}")
+
+
+   def search_items():
+       search_text = search_entry.get()
+       for item in trv.get_children():
+           trv.delete(item)
+       cursor.execute("SELECT * FROM items WHERE item_name LIKE ?", ('%' + search_text + '%',))
+       for row in cursor.fetchall():
+           trv.insert("", "end", values=row)
+
+
+   def load_items():
+       for item in trv.get_children():
+           trv.delete(item)
+       for row in getAllFoodItems():
+           trv.insert("", "end", values=row)
+
+
+   # Navigation functions
+   def navigate_treeview(action):
+       items = trv.get_children()
+       if not items:
+           return
+
+
+       if action == 'first':
+           trv.selection_set(items[0])
+           trv.see(items[0])
+       elif action == 'last':
+           trv.selection_set(items[-1])
+           trv.see(items[-1])
+       else:
+           selected = trv.selection()
+           if not selected:
+               return
+           current_index = items.index(selected[0])
+           if action == 'next' and current_index < len(items) - 1:
+               trv.selection_set(items[current_index + 1])
+               trv.see(items[current_index + 1])
+           elif action == 'previous' and current_index > 0:
+               trv.selection_set(items[current_index - 1])
+               trv.see(items[current_index - 1])
+
+
+
+
+   button_add.config(command=add_food_item)
+   button_edit.config(command=update_food_item)
+   button_remove.config(command=delete_food_item)
+   button_clear.config(command=clear_fields)
+   button_browse_pic.config(command=load_image)
+   button_trv_search.config(command=search_items)
+   button_trv_viewFood.config(command=load_items)
+
+
+   button_first.config(command=lambda: navigate_treeview('first'))
+   button_last.config(command=lambda: navigate_treeview('last'))
+   button_next.config(command=lambda: navigate_treeview('next'))
+   button_previous.config(command=lambda: navigate_treeview('previous'))
+
+
+   lbl_title1 = Label(foodDash_frame, text="Manage Menu Items", font=('Verdana', 30, 'bold'), fg='#A52A2A')
+   lbl_title1.place(x=900, y=50, anchor=CENTER)
+
+
+   load_items()
+def review_Dash():
+   class WrappedTreeview(ttk.Treeview):
+       def __init__(self, master=None, **kwargs):
+           super().__init__(master, **kwargs)
+
+
+       def insert(self, parent, index, iid=None, **kwargs):
+           if 'values' in kwargs:
+               values = list(kwargs['values'])
+               # Wrap text in the 'Review' column (assuming it's the 4th column here)
+               review_text = values[3]
+               wrapped_text = self.wrap_text(review_text, 110)  # Adjust the width as needed
+               values[3] = wrapped_text
+               kwargs['values'] = tuple(values)
+           super().insert(parent, index, iid, **kwargs)
+
+
+       def wrap_text(self, text, width):
+           wrapped_lines = []
+           words = text.split()
+           current_line = ''
+           for word in words:
+               if len(current_line) + len(word) + 1 <= width:
+                   if current_line:
+                       current_line += ' ' + word
+                   else:
+                       current_line = word
+               else:
+                   wrapped_lines.append(current_line)
+                   current_line = word
+           if current_line:
+               wrapped_lines.append(current_line)
+           return '\n'.join(wrapped_lines)
+
+
+   def dynamic_row_height():
+       wrapped_lines=[]
+
+
+   # Main Window for displaying reviews
+
+
+   reviewDash_frame = Frame(main_frame)
+   reviewDash_frame.place(x=0, y=0, width=1950, height=950)
+
+
+   # Tree View Frame
+   reviews_container = Frame(reviewDash_frame)
+   reviews_container.place(x=100, y=160, width=1700, height=700)
+
+
+   # Treeview Scrollbar
+   tree_scroll = Scrollbar(reviews_container)
+   tree_scroll.place(x=1860, height=850)
+
+
+   # Creating the Treeview
+   columns = ("Review ID", "Customer", "Rating", "Review")
+   review_treeview = WrappedTreeview(reviews_container, columns=columns, show='headings',
+                                     yscrollcommand=tree_scroll.set)
+   review_treeview.place(x=0, y=0, width=1600, height=700)
+
+
+   # Configure scrollbar
+   tree_scroll.config(command=review_treeview.yview)
+
+
+   style = ttk.Style()
+   style.configure("Treeview", font=('Verdana', 15), rowheight=50)
+   style.configure("Treeview.Heading", font=('Verdana', 20, 'bold'), foreground='#A52A2A')
+
+
+   review_treeview.heading("Review ID", text="Review ID")
+   review_treeview.heading("Customer", text="Customer")
+   review_treeview.heading("Rating", text="Rating")
+   review_treeview.heading("Review", text="Review")
+   review_treeview.column("Review ID", width=180, anchor='center')
+   review_treeview.column("Customer", width=200, anchor='center')
+   review_treeview.column("Rating", width=200, anchor='center')
+   review_treeview.column("Review", width=1360, anchor='w')
+   review_treeview.pack(fill='both', expand=True)
+
+
+   def update_review_treeview():
+       # Clear existing data in the treeview
+       for review in review_treeview.get_children():
+           review_treeview.delete(review)
+       try:
+           with sqlite3.connect("db_thewok1.db") as conn:
+               cursor = conn.cursor()
+               # Fetch data from the database
+               cursor.execute("""
+                     SELECT r.review_id, c.username, r.customer_rating, r.customer_review
+                     FROM reviews r
+                     JOIN customer c ON r.cust_id = c.cust_id
+                 """)
+               rows = cursor.fetchall()
+
+
+               # Populate the treeview with fetched data
+               for row in rows:
+                   review_treeview.insert("", "end", values=row)
+       except sqlite3.Error as e:
+           messagebox.showerror("Error", f"Error fetching review data: {e}")
+
+
+   def delete_review():
+       selected_item = review_treeview.selection()
+       if not selected_item:
+           messagebox.showerror("Error", "Please select a review to delete.")
+           return
+
+
+       review_id = review_treeview.item(selected_item)["values"][0]
+       try:
+           with sqlite3.connect("db_thewok1.db") as conn:
+               cursor = conn.cursor()
+               cursor.execute("DELETE FROM reviews WHERE review_id = ?", (review_id,))
+               conn.commit()
+               messagebox.showinfo("Success", "Review deleted successfully!")
+               update_review_treeview()
+       except sqlite3.Error as e:
+           messagebox.showerror("Error", f"Error deleting review: {e}")
+
+
+   update_review_treeview()
+
+
+   lbl_title2 = Label(reviewDash_frame, text="Manage Customer Reviews", font=('Verdana', 30, 'bold'), fg='#A52A2A')
+   lbl_title2.place(x=900, y=50, anchor=CENTER)
+
+
+   delete_review_button = Button(reviewDash_frame, text="Delete Review", font=('Verdana', 15, 'bold'),
+                                    command=delete_review, bg='#A52A2A', fg='#EEE3AD', width=15)
+   delete_review_button.place(x=860, y=880)
+
+
+def generate_reservation_id():
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("SELECT reservation_id FROM reservations ORDER BY reservation_id DESC LIMIT 1")
+           last_id = cursor.fetchone()
+           if last_id:
+               last_id_num = int(last_id[0][1:])  # Remove the 'R' and convert to integer
+               new_id_num = last_id_num + 1
+               new_id = f"R{new_id_num:03}"
+           else:
+               new_id = "R001"
+           return new_id
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error accessing the database: {e}")
+       return None
+
+
+
+
+def add_reservation():
+   global entry_name, combobox_pax, entry_date, entry_time, text_comments, reservations_treeview, combobox_time, entry_contact, contact
+   reservation_id = generate_reservation_id()
+   if not reservation_id:
+       return  # Error message already shown in generate_reservation_id function
+
+
+   name = entry_name.get()
+   contact = entry_contact.get()
+   pax = combobox_pax.get()
+   date = entry_date.get()
+   time = combobox_time.get()
+   comments = text_comments.get("1.0", END).strip()
+
+
+   if comments == "" or comments == " ":
+       comments = "None"
+
+
+   if not (name and pax and date and time):
+       messagebox.showerror("Input Error", "Please fill all the fields")
+       return
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute(
+               "INSERT INTO reservations (reservation_id, reservation_name, reservation_contact, reservation_pax, reservation_date, reservation_time, reservation_comments, reservation_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+               (reservation_id, name, contact, pax, date, time, comments, ''))
+           conn.commit()
+           messagebox.showinfo("Successfully reserved!",
+                               f"You had made a reservation for {name} on {date}, {time} for {pax} people.\nComments:{comments}")
+           update_reservations_treeview()
+           entry_name.delete(0, 'end')
+           entry_date.delete(0, 'end')
+           combobox_time.delete(0, 'end')
+           combobox_pax.delete(0, 'end')
+           text_comments.delete(1.0, 'end')
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error saving the reservation: {e}")
+
+
+
+
+
+
+def insert_entry_box(event):
+   global entry_name, combobox_pax, entry_date, combobox_time, reservations_treeview, text_comments, entry_contact
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       return
+
+
+   item = reservations_treeview.item(selected_item)
+   reservation_id = item["values"][0]
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute(
+               'SELECT reservation_name, reservation_contact, reservation_pax, reservation_date, reservation_time, reservation_comments FROM reservations WHERE reservation_id = ?',
+               (reservation_id,))
+           data = cursor.fetchone()
+
+
+           if data:
+               name, contact, pax, date, time, comments = data
+               entry_name.config(state='normal')
+               entry_name.delete(0, END)
+               entry_name.insert(0, name)
+               entry_name.config(state='readonly')  # Make name field read-only
+
+               entry_contact.config(state='normal')
+               entry_contact.delete(0, END)
+               entry_contact.insert(0, contact)
+               entry_contact.config(state='readonly')
+
+               combobox_pax.set(pax)
+
+               entry_date.delete(0, END)
+               entry_date.insert(0, date)
+
+               combobox_time.set(time)
+
+
+               text_comments.delete(1.0, END)
+               text_comments.insert(END, comments)
+
+
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error fetching reservation: {e}")
+
+
+
+
+def update_reservation():
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       messagebox.showerror("Selection Error", "Please select a reservation to update")
+       return
+
+
+   reservation_id = reservations_treeview.item(selected_item)['values'][0]
+   pax = combobox_pax.get()
+   date = entry_date.get()
+   time = combobox_time.get()
+   comments = text_comments.get(1.0, END).strip()
+
+
+   if comments == "" or comments == " ":
+       comments = "None"
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("""
+               UPDATE reservations
+               SET reservation_pax = ?, reservation_date = ?, reservation_time = ?, reservation_comments = ?
+               WHERE reservation_id = ?
+           """, (pax, date, time, comments, reservation_id))
+           conn.commit()
+           messagebox.showinfo("Success", "Reservation details updated successfully!")
+           update_reservations_treeview()
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error updating reservation: {e}")
+
+
+
+
+def update_reservations_treeview():
+   global reservations_treeview
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("SELECT * FROM reservations")
+           reservations = cursor.fetchall()
+           # Clear current treeview
+           for item in reservations_treeview.get_children():
+               reservations_treeview.delete(item)
+           # Insert new data
+           for reservation in reservations:
+               reservations_treeview.insert("", END, values=reservation)
+       root.after(10000,update_reservations_treeview)
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error fetching reservations: {e}")
+
+
+def clear_history():
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       messagebox.showerror("Selection Error", "Please select a reservation to clear.")
+       return
+
+
+   reservation_id = reservations_treeview.item(selected_item)['values'][0]
+
+
+       # Delete from the database
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("DELETE FROM reservations WHERE reservation_id = ?", (reservation_id,))
+           conn.commit()
+
+
+       # Delete from the Treeview
+       reservations_treeview.delete(selected_item)
+       messagebox.showinfo("Success", "Selected reservation cleared successfully!")
+
+
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error deleting reservation: {e}")
+
+def mark_arrival():
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       messagebox.showerror("Selection Error", "Please select a reservation to mark arrival.")
+       return
+
+
+   reservation_id = reservations_treeview.item(selected_item)['values'][0]
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("UPDATE reservations SET reservation_status = '1' WHERE reservation_id = ?",
+                          (reservation_id,))
+           conn.commit()
+           messagebox.showinfo("Success", "Reservation marked as arrived!")
+           update_reservations_treeview()
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error marking arrival: {e}")
+
+
+def cancel_reservation():
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       messagebox.showerror("Selection Error", "Please select a reservation to cancel.")
+       return
+
+
+   reservation_id = reservations_treeview.item(selected_item)['values'][0]
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("UPDATE reservations SET reservation_status = '0' WHERE reservation_id = ?",
+                          (reservation_id,))
+           conn.commit()
+           messagebox.showinfo("Success", "Reservation successfully cancel.")
+           update_reservations_treeview()
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error making cancel: {e}")
+
+
+def clear_status():
+   selected_item = reservations_treeview.selection()
+   if not selected_item:
+       messagebox.showerror("Selection Error", "Please select a reservation to clear status.")
+       return
+
+
+   reservation_id = reservations_treeview.item(selected_item)['values'][0]
+
+
+   try:
+       with sqlite3.connect("db_thewok1.db") as conn:
+           cursor = conn.cursor()
+           cursor.execute("UPDATE reservations SET reservation_status = '' WHERE reservation_id = ?",
+                          (reservation_id,))
+           conn.commit()
+           messagebox.showinfo("Success", "Status cleared!")
+           update_reservations_treeview()
+   except sqlite3.Error as e:
+       messagebox.showerror("Database Error", f"Error updating status: {e}")
+
+
+
+
+def initialising_reservation_gui():
+   global entry_name, combobox_pax, entry_date, entry_time, text_comments, reservations_treeview, combobox_time, entry_contact
+
+
+   class WrappedTreeview(ttk.Treeview):
+       def __init__(self, master=None, **kwargs):
+           super().__init__(master, **kwargs)
+
+
+       def insert(self, parent, index, iid=None, **kwargs):
+           if 'values' in kwargs:
+               values = list(kwargs['values'])
+               review_text = values[6]  # Assuming 'Comments' is the 6th column
+               wrapped_text = self.wrap_text(review_text, 130)
+               values[6] = wrapped_text
+               kwargs['values'] = tuple(values)
+           super().insert(parent, index, iid, **kwargs)
+
+
+       def wrap_text(self, text, width):
+           wrapped_lines = []
+           words = text.split()
+           current_line = ''
+           for word in words:
+               if len(current_line) + len(word) + 1 <= width:
+                   if current_line:
+                       current_line += ' ' + word
+                   else:
+                       current_line = word
+               else:
+                   wrapped_lines.append(current_line)
+                   current_line = word
+           if current_line:
+               wrapped_lines.append(current_line)
+           return '\n'.join(wrapped_lines)
+
+
+   # Buttons Frame
+   buttons_frame = Frame(reservation_frame, relief='groove', bd=2)
+   buttons_frame.place(x=87, y=600, width=1750, height=300)
+
+
+   # Input Fields Frame
+   input_frame = Frame(reservation_frame)
+   input_frame.place(x=315, y=620, width=1520, height=270)
+
+
+   # Treeview Scrollbar
+   tree_scroll = Scrollbar(reservation_frame)
+   tree_scroll.place(x=1860,y=150, height=350)
+
+
+   # Title
+   lbl_manage_orders = Label(reservation_frame, text="Manage Reservations", font=('Verdana', 30, 'bold'), fg='#A52A2A')
+   lbl_manage_orders.place(x=960, y=50, anchor='center')
+
+
+   # Creating the Treeview
+   columns = (1, 2, 3, 4, 5, 6, 7,8)
+   reservations_treeview = WrappedTreeview(reservation_frame, columns=columns, show='headings',
+                                           yscrollcommand=tree_scroll.set)
+   reservations_treeview.place(x=960, y=320, width=1750, height=450, anchor='center')
+
+
+   # Configure scrollbar
+   tree_scroll.config(command=reservations_treeview.yview)
+
+
+   style = ttk.Style()
+   style.configure("Treeview", font=('Verdana', 12), rowheight=45)
+   style.configure("Treeview.Heading", font=('Verdana', 14, 'bold'), foreground='#A52A2A')
+
+
+   # Headings
+   reservations_treeview.heading(1, text="ID")
+   reservations_treeview.heading(2, text="Name")
+   reservations_treeview.heading(3, text="Contact")
+   reservations_treeview.heading(4, text="PAX")
+   reservations_treeview.heading(5, text="Date")
+   reservations_treeview.heading(6, text="Time")
+   reservations_treeview.heading(7, text="Comments")
+   reservations_treeview.heading(8, text="Status")
+
+
+   # Columns
+   reservations_treeview.column(1, width=80, anchor='center')
+   reservations_treeview.column(2, width=150, anchor='center')
+   reservations_treeview.column(3, width=150, anchor='center')
+   reservations_treeview.column(4, width=80, anchor='center')
+   reservations_treeview.column(5, width=80, anchor='center')
+   reservations_treeview.column(6, width=80, anchor='center')
+   reservations_treeview.column(7, width=150, anchor='center')
+   reservations_treeview.column(8, width=100, anchor='center')
+
+
+   # Buttons
+   btn_add = Button(buttons_frame, text="Book Table", font=('Verdana', 13, 'bold'), width=10, bg='brown',
+                       fg='#EEE3AD', command=add_reservation)
+   btn_add.place(x=50, y=20)
+
+
+   btn_update = Button(buttons_frame, text="Update", font=('Verdana', 13, 'bold'), width=10, bg='brown',
+                          fg='#EEE3AD', command=update_reservation)
+   btn_update.place(x=50, y=60)
+
+
+   btn_clearhis = Button(buttons_frame, text="Clear History", font=('Verdana', 13, 'bold'), width=10, bg='brown',
+                       fg='#EEE3AD', command=clear_history)
+   btn_clearhis.place(x=50, y=100)
+
+
+   btn_arrival = Button(buttons_frame, text="Arrival - 1", font=('Verdana', 13, 'bold'), width=10, bg='light yellow',
+                          fg="brown", command=mark_arrival)
+   btn_arrival.place(x=50, y=140)
+
+
+   btn_cancel = Button(buttons_frame, text="Cancel - 0", font=('Verdana', 13, 'bold'), width=10, bg='light yellow',
+                         fg='brown', command=cancel_reservation)
+   btn_cancel.place(x=50, y=180)
+
+
+   btn_clear = Button(buttons_frame, text="Clear Status", font=('Verdana', 13, 'bold'), width=10, bg='light yellow',
+                       fg='brown', command=clear_status)
+   btn_clear.place(x=50, y=220)
+
+
+   reservations_treeview.bind('<<TreeviewSelect>>', insert_entry_box)
+
+
+   # Input Reservations
+   lbl_name = Label(input_frame, text="Name:", font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_name.place(x=20, y=20)
+
+
+   entry_name = Entry(input_frame, font=('Verdana', 15), width=20)
+   entry_name.place(x=100, y=20)
+
+
+   lbl_contact = Label(input_frame, text="Contact:", font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_contact.place(x=430, y=20)
+
+
+   entry_contact = Entry(input_frame, font=('Verdana', 15), width=20)
+   entry_contact.place(x=550, y=20)
+
+
+   lbl_pax = Label(input_frame, text="Pax:", font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_pax.place(x=860, y=20)
+
+
+   pax_no = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30]
+   selected = IntVar(root)
+
+
+   combobox_pax = ttk.Combobox(input_frame, font=('Verdana', 15), width=5, textvariable=selected, values=pax_no)
+   combobox_pax.place(x=925, y=20)
+
+
+   lbl_date = Label(input_frame, text="Date (Eg: 1 Jan):", font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_date.place(x=20, y=70)
+
+
+   entry_date = Entry(input_frame, font=('Verdana', 15, 'bold'), width=11)
+   entry_date.place(x=250, y=70)
+
+
+   lbl_time = Label(input_frame, text='Arrival Time:', font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_time.place(x=430, y=70)
+
+
+   time = ['11.30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '2:00 PM', '2.30 PM']
+   selected_time = IntVar(root)
+
+
+   combobox_time = ttk.Combobox(input_frame, font=('Verdana', 15), width=10, textvariable=selected_time, values=time)
+   combobox_time.place(x=590, y=70)
+
+
+   lbl_comments = Label(input_frame, text='Comments:', font=('Verdana', 15, 'bold'), fg='brown')
+   lbl_comments.place(x=20, y=120)
+
+
+   text_comments = Text(input_frame, font=('Verdana', 15), height=3, width=60)
+   text_comments.place(x=160, y=120)
+
+
+   update_reservations_treeview()
+
+def reservation_page():
+    global reservation_frame
+    reservation_frame= Frame(main_frame)
+    reservation_frame.place(relwidth=1, relheight=1)
+    initialising_reservation_gui()
+
+def fetch_orders_data():
+    try:
+        conn = sqlite3.connect("db_thewok1.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        SELECT o.order_id, v.visit_id, o.total_price, o.order_status
+        FROM visiting v
+        JOIN orders o ON v.visit_id = o.visit_id
+        """)
+
+        data = cursor.fetchall()
+        conn.close()
+
+        # Debug print to check fetched data
+        print("Fetched data:", data)
+
+        return data
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Error fetching order data: {e}")
+        return None
+def display_order_trv():
+    for record in order_trv.get_children():
+        order_trv.delete(record)
+
+    orders = fetch_orders_data()
+    if orders:
+        for data in orders:
+            order_trv.insert('', 'end', values=data)
+
+def item_selected(event):
+    for selected_item in order_trv.selection():
+        item = order_trv.item(selected_item)
+        record = item['values']
+
+        # Debug print to check the selected record
+        print("Selected record:", record)
+
+        order_id_select.config(state='normal')
+        order_id_select.delete(0, END)
+        order_id_select.insert(0, record[0])
+        order_id_select.config(state='readonly')
+
+        visit_select.config(state='normal')
+        visit_select.delete(0, END)
+        visit_select.insert(0, record[1])
+        visit_select.config(state='readonly')
+
+        total_price_select.config(state='normal')
+        total_price_select.delete(0, END)
+        total_price_select.insert(0, str(record[2]))  # Convert total_price to string
+        total_price_select.config(state='readonly')
+
+        selected.set(record[3])
+        combobox_status.set(record[3])
+
+
+def update_status():
+    selected_item = order_trv.selection()
+    if not selected_item:
+        messagebox.showerror("Selection Error", "Please select an order to update.")
+        return
+    selected_item = order_trv.selection()[0]
+    order_id = order_trv.item(selected_item)['values'][0]
+    new_status = selected.get()
+
+    try:
+        conn = sqlite3.connect("db_thewok1.db")
+        cursor = conn.cursor()
+        cursor.execute("UPDATE orders SET order_status = ? WHERE order_id = ?", (new_status, order_id))
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Success", "Order status updated successfully!")
+        display_order_trv()  # Refresh
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Error updating order status: {e}")
+
+
+def delete_order():
+    selected_item = order_trv.selection()
+    if not selected_item:
+        messagebox.showerror("Selection Error", "Please select an order to delete.")
+        return
+    selected_item = order_trv.selection()[0]
+    order_id = order_trv.item(selected_item)['values'][0]
+
+    confirm = messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this order?")
+    if confirm:
+        try:
+            conn = sqlite3.connect("db_thewok1.db")
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM order_items WHERE order_id = ?", (order_id,))
+            cursor.execute("DELETE FROM orders WHERE order_id = ?", (order_id,))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Success", "Order deleted successfully!")
+            display_order_trv()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error deleting order: {e}")
+
+
+def order_gui():
+    global order_trv, order_id_select, visit_select, total_price_select, selected, combobox_status
+    #------------------Frames------------------------------------------------------------------------------------------
+
+    order_frame = Frame(order_status_frame)
+    order_frame.place(x=0, y=0, width=1650, height=1080)
+
+    details_frame = Frame(order_status_frame, relief='groove', bd=2)
+    details_frame.place(x=180, y=650, width=1500, height=250)
+
+    #------------------Title------------------------------------------------------------------------------------------
+
+    lbl_manage_orders = Label(order_status_frame, text="Manage Orders", font=('Verdana', 30, 'bold'), fg='#A52A2A')
+    lbl_manage_orders.place(x=960, y=50, anchor='center')
+
+    #------------------Tree View--------------------------------------------------------------------------------------
+
+    order_trv = ttk.Treeview(order_frame, columns=(1, 2, 3, 4), show='headings')
+
+    style = ttk.Style()
+    style.configure("Treeview.Heading", font=('Verdana', 15, 'bold'), foreground='#A52A2A')
+    style.configure("Treeview", font=('Verdana', 12))
+
+    order_trv.column(1, anchor='s', stretch=NO, width=310)
+    order_trv.column(2, anchor='s', stretch=NO, width=310)
+    order_trv.column(3, anchor='s', stretch=NO, width=350)
+    order_trv.column(4, anchor='s', stretch=NO, width=500)
+
+    order_trv.heading(1, text='Order ID')
+    order_trv.heading(2, text='Visit ID')
+    order_trv.heading(3, text='Total Price')
+    order_trv.heading(4, text='Order Status')
+
+    order_trv.place(x=960, y=360, width=1500, height=530, anchor='center')
+
+    order_trv.bind('<<TreeviewSelect>>', item_selected)
+
+    #------------------Labels--------------------------------------------------------------------------------------
+
+    #1st Column
+    lbl_order_id = Label(details_frame, text='Order ID:', font=('Verdana', 15, 'bold'), fg='brown')
+    lbl_order_id.place(x=50, y=20)
+
+    order_id_select = Entry(details_frame, font=('Verdana', 15), width=20)
+    order_id_select.place(x=170, y=35, anchor='w')
+
+    lbl_status = Label(details_frame, text='Order Status:', font=('Verdana', 15, 'bold'), fg='brown')
+    lbl_status.place(x=50, y=70)
+
+    #2nd Column
+    lbl_visit = Label(details_frame, text='Visit ID:', font=('Verdana', 15, 'bold'), fg='brown')
+    lbl_visit.place(x=600, y=20)
+
+    visit_select = Entry(details_frame, font=('Verdana', 15), width=20)
+    visit_select.place(x=710, y=35, anchor='w')
+
+    lbl_total_price = Label(details_frame, text='Total Price:', font=('Verdana', 15, 'bold'), fg='brown')
+    lbl_total_price.place(x=600, y=70)
+
+    total_price_select = Entry(details_frame, font=('Verdana', 15), width=20)
+    total_price_select.place(x=740, y=85, anchor='w')
+
+    #------------------ Button --------------------------------------------------------------------------------------
+    btn_update = Button(details_frame, text="Update", font=('Verdana', 15, 'bold'), bg='brown', fg='#EEE3AD', width=10, command=update_status)
+    btn_update.place(x=1100, y=170)
+
+    btn_delete = Button(details_frame, text="Delete", font=('Verdana', 15, 'bold'), bg='blue', fg='white', width=10, command=delete_order)
+    btn_delete.place(x=1300, y=170)
+
+    #------------------Combobox-------------------------------------------------------------------------------------------
+    status = ['Preparing', 'Delivered']
+    selected = StringVar(root)
+    combobox_status = ttk.Combobox(details_frame, font=('Verdana', 14), textvariable=selected, values=status, width=10)
+    combobox_status.place(x=290, y=85, anchor='center')
+    combobox_status.place(x=290, y=85, anchor='center')
+
+    display_order_trv()
+
+def order_status_page():
+    global order_status_frame
+    order_status_frame = Frame(main_frame)
+    order_status_frame.place(relwidth=1, relheight=1)
+    order_gui()
+
+
+def information_page():
+    global information_frame, entries
+
+    # Create and place the main frame
+    information_frame = Frame(main_frame)
+    information_frame.place(relwidth=1, relheight=1)
+
+    # Create form entries and populate them
+    entries = create_form(information_frame)
+
+    # Create and place the Save and Update button
+    save_button = Button(information_frame, text='Save and Update', command=save_button_action, font=('verdana', 15), bg='brown', activebackground='yellow', fg='light yellow')
+    save_button.place(x=960, y=780, anchor='center')
+
+def create_form(information_frame):
+    # Create labels and entry widgets
+    labels = [
+        "API Key",
+        "Restaurant Name",
+        "Restaurant Operation Hour",
+        "Restaurant Location",
+        "Restaurant Contact Number",
+        "Restaurant Email",
+        "Others"
+    ]
+
+    entries = {}
+
+    # Create and place the widgets
+    y_offset = 50
+    label_width = 350
+    entry_width = 1250
+    entry_height = 30
+
+    for i, label in enumerate(labels):
+        Label(information_frame, text=label, anchor="w", font=("Helvetica", 16)).place(x=150, y=y_offset + i * 60, width=label_width, height=entry_height)
+        if label == "Others":
+            entry = Text(information_frame, font=("Helvetica", 16))
+            entry.place(x=480, y=y_offset + i * 60, width=entry_width, height=entry_height * 3)
+        elif label == 'API Key':
+            entry = Entry(information_frame, font=("Helvetica", 16), show='*')
+            entry.place(x=480, y=y_offset + i * 60, width=entry_width, height=entry_height)
+        else:
+            entry = Entry(information_frame, font=("Helvetica", 16))
+            entry.place(x=480, y=y_offset + i * 60, width=entry_width, height=entry_height)
+        entries[label] = entry
+
+    # Populate the form with existing data from the database
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM restaurant_information')
+    data = cursor.fetchone()
+    if data:
+        api_key, name, hour, location, contact, email, others = data
+        entries["API Key"].insert(0, api_key)
+        entries["Restaurant Name"].insert(0, name)
+        entries["Restaurant Name"].config(state='readonly')
+        entries["Restaurant Operation Hour"].insert(0, hour)
+        entries["Restaurant Location"].insert(0, location)
+        entries["Restaurant Contact Number"].insert(0, contact)
+        entries["Restaurant Email"].insert(0, email)
+        entries["Others"].insert('1.0', others)
+
+    return entries
+
+def save_button_action():
+    global chatAPIKey, restaurant_name, restaurant_operation_hour, restaurant_location, restaurant_contact_number, restaurant_email, restaurant_other
+    chatAPIKey = entries["API Key"].get()
+    restaurant_name = entries["Restaurant Name"].get()
+    restaurant_operation_hour = entries["Restaurant Operation Hour"].get()
+    restaurant_location = entries["Restaurant Location"].get()
+    restaurant_contact_number = entries["Restaurant Contact Number"].get()
+    restaurant_email = entries["Restaurant Email"].get()
+    restaurant_other = entries["Others"].get("1.0", END).strip()
+    if restaurant_name and restaurant_operation_hour and restaurant_location and restaurant_contact_number and restaurant_email:
+        if chatAPIKey == ' ' or chatAPIKey == '':
+            save_to_db()
+            messagebox.showinfo("Success", "Information successfully saved!")
+        else:
+            validate_api()
+    else:
+        messagebox.showerror("Error", "Please fill in all fields.")
+
+def validate_api():
+    global chatAPIKey
+    chat_objective = 2
+    chat_objective2 = str(chat_objective)
+    try:
+        headers = {
+            'Authorization': f'Bearer {chatAPIKey}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            "query": "Hi",
+            "inputs": {
+                "restaurantInformation": 'test1',
+                "maxWord": 'test2',
+                "restaurantMenu": 'test3',
+                "chatObjective": chat_objective2
+            },
+            "response_mode": "blocking",  # Use blocking mode for a quick response
+            "user": "abc-123",
+            "conversation_id": "",
+            "files": []
+        }
+        response = requests.post(APIBaseURL + '/chat-messages', headers=headers, data=json.dumps(data))
+        if response.status_code == 200:
+            response_data = response.json()
+            if 'answer' in response_data:
+                save_to_db()
+                messagebox.showinfo("Success", "Information successfully saved!")
+            else:
+                messagebox.showerror("Error", "Something went wrong! The API Key entered may be invalid!")
+                chatAPIKey = ""
+        else:
+            messagebox.showerror("Error", "Something went wrong! The API Key entered may be invalid!")
+            chatAPIKey = ""
+    except Exception as e:
+        messagebox.showerror("Error", f"Something went wrong! The API Key entered may be invalid!\n{e}")
+        chatAPIKey = ""
+
+def save_to_db():
+    global chatAPIKey, restaurant_name, restaurant_operation_hour, restaurant_location, restaurant_contact_number, restaurant_email, restaurant_other
+
+    # Use a default value for chatAPIKey if it's empty
+    chatAPIKey = chatAPIKey.strip()
+    if not chatAPIKey:
+        chatAPIKey = ''
+
+    # Check if a record already exists based on the restaurant name
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM restaurant_information WHERE restaurant_name = ?', (restaurant_name,))
+    data = cursor.fetchone()
+
+    if data:
+        # Update the record if it exists
+        cursor.execute('''
+            UPDATE restaurant_information 
+            SET restaurant_API = ?, 
+                restaurant_operation_hour = ?, 
+                restaurant_location = ?, 
+                restaurant_contact_number = ?, 
+                restaurant_email = ?, 
+                restaurant_others = ? 
+            WHERE restaurant_name = ?
+        ''', (
+            chatAPIKey, restaurant_operation_hour, restaurant_location, restaurant_contact_number,
+            restaurant_email, restaurant_other, restaurant_name))
+    else:
+        # Insert a new record if it doesn't exist
+        cursor.execute('''
+            INSERT INTO restaurant_information 
+            (restaurant_API, restaurant_name, restaurant_operation_hour, restaurant_location, restaurant_contact_number, restaurant_email, restaurant_others) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (chatAPIKey, restaurant_name, restaurant_operation_hour, restaurant_location, restaurant_contact_number,
+              restaurant_email, restaurant_other))
+
+    conn.commit()
+
+def hide_indicators():
+    global foodDash_indicate, review_indicate, reservation_indicate, order_status_indicate, information_indicate
+    foodDash_indicate.config(bg='brown')
+    review_indicate.config(bg='brown')
+    reservation_indicate.config(bg='brown')
+    order_status_indicate.config(bg='brown')
+    information_indicate.config(bg='brown')
+
+def delete_pages():
+    for frame in main_frame.winfo_children():
+        frame.destroy()
+
+def indicate(lb, page):
+    hide_indicators()
+    lb.config(bg='white')
+    delete_pages()
+    page()
+
+def toggle_menu():
+    global foodDash_indicate, review_indicate, menu_indicate, reservation_indicate, order_status_indicate, information_indicate
+
+    def collapse_toggle_menu():
+        global foodDash_indicate, review_indicate, menu_indicate, reservation_indicate, order_status_indicate, information_indicate
+        toggle_menu_fm.destroy()
+        toggle_btn.config(text=' ≡ ')
+        toggle_btn.config(command=toggle_menu)
+
+    toggle_menu_fm = Frame(root, bg='brown')
+
+    foodDash_btn = Button(toggle_menu_fm, text='Food Dash', font=('times new roman', 20), bd=0, fg='white', bg='brown', activebackground='brown', command=lambda: ([indicate(foodDash_indicate, food_Dash),collapse_toggle_menu()]))
+    foodDash_btn.place(x=20, y=0)
+    foodDash_indicate = Label(toggle_menu_fm, text='', bg='brown')
+    foodDash_indicate.place(x=3, y=0, width=5, height=45)
+
+    review_btn = Button(toggle_menu_fm, text='Review Dash', font=('times new roman', 20), bd=0, fg='white', bg='brown', activebackground='brown', command=lambda: ([indicate(review_indicate, review_Dash),collapse_toggle_menu()]))
+    review_btn.place(x=20, y=50)
+    review_indicate = Label(toggle_menu_fm, text='', bg='brown')
+    review_indicate.place(x=3, y=50, width=5, height=45)
+
+    reservation_btn = Button(toggle_menu_fm, text='Reservations', font=('times new roman', 20), bd=0, fg='white', bg='brown', activebackground='brown', command=lambda: ([indicate(reservation_indicate, reservation_page),collapse_toggle_menu()]))
+    reservation_btn.place(x=20, y=100)
+    reservation_indicate = Label(toggle_menu_fm, text='', bg='brown')
+    reservation_indicate.place(x=3, y=100, width=5, height=45)
+
+    order_status_btn = Button(toggle_menu_fm, text='Order Status', font=('times new roman', 20), bd=0, fg='white', bg='brown', activebackground='brown', command=lambda: ([indicate(order_status_indicate, order_status_page),collapse_toggle_menu()]))
+    order_status_btn.place(x=20, y=150)
+    order_status_indicate = Label(toggle_menu_fm, text='', bg='brown')
+    order_status_indicate.place(x=3, y=150, width=5, height=45)
+
+    information_btn = Button(toggle_menu_fm, text='Information Page', font=('times new roman', 20), bd=0, fg='white', bg='brown', activebackground='brown', command=lambda: ([indicate(information_indicate, information_page),collapse_toggle_menu()]))
+    information_btn.place(x=20, y=200)
+    information_indicate = Label(toggle_menu_fm, text='', bg='brown')
+    information_indicate.place(x=3, y=200, width=5, height=45)
+
+    window_height = 1080
+    toggle_menu_fm.place(x=0, y=50, height=window_height, width=250)
+
+    toggle_btn.config(text=' X ')
+    toggle_btn.config(command=collapse_toggle_menu)
+
+def Exit_page():
+    result = messagebox.askquestion('System', 'Are you sure you want to exit?', icon="warning")
+    if result == 'yes':
+        root.destroy()
+
+head_frame = Frame(root, bg='brown')
+
+toggle_btn = Button(head_frame, text=' ≡ ', bg='brown', fg='white', font=('Bold', 20), bd=0, activebackground='black', activeforeground='yellow', command=toggle_menu)
+toggle_btn.place(x=10, y=0)
+
+toggle_btn2= Button(head_frame, text='X', bg='brown', fg='white', font=('Bold', 20), bd=0, activebackground='white', activeforeground='brown', command=Exit_page)
+toggle_btn2.place(x=1870, y=0)
+
+title_lb = Label(head_frame, text='Admin Panel', fg='white', bg='brown', font=('Impact', 20))
+title_lb.place(x=100, y=5)
+
+head_frame.pack(side=TOP, fill=X)
+head_frame.pack_propagate(False)
+head_frame.configure(height=50)
+
+main_frame = Frame(root)
+main_frame.pack(side=RIGHT)
+main_frame.pack_propagate(False)
+main_frame.configure(height=1080, width=1920)
+
+
+
+
+
+
+
+
+
+
+
+USERNAME_LOGIN = StringVar()
+PASSWORD_LOGIN = StringVar()
+USERNAME_REGISTER = StringVar()
+PASSWORD_REGISTER = StringVar()
+
+login_register_frame = Frame(root, width=1920, height=1080, bg='azure')
+login_register_frame.place(x=0,y=0)
+def LoginFormAdmin():
+   global LoginFrame, lbl_result1  # Ask ma'am what lbl_result1 is for
+   LoginFrame = Frame(login_register_frame)
+   LoginFrame.config(bg='#EEE3AD')
+   LoginFrame.place(relx=0.5, rely=0.5, anchor=CENTER, width=500, height=450)
+
+
+   lbl_title = Label(LoginFrame, text="Login As Admin:", font=('times new roman', 25, 'bold'), bd=18, bg='#EEE3AD', fg='#A52A2A')
+   lbl_title.place(relx=0.5, rely=0.2, anchor=CENTER)
+
+
+   lbl_username = Label(LoginFrame, text="Username:", font=('times new roman', 16), bd=18, bg='#EEE3AD')
+   lbl_username.place(relx=0.2, rely=0.4, anchor=CENTER)
+
+
+   lbl_password = Label(LoginFrame, text="Password:", font=('times new roman', 16), bd=18, bg='#EEE3AD')
+   lbl_password.place(relx=0.2, rely=0.5, anchor=CENTER)
+
+
+   username = Entry(LoginFrame, font=('times new roman', 16), textvariable=USERNAME_LOGIN, width=20)
+   username.place(relx=0.6, rely=0.4, anchor=CENTER)
+
+
+   password = Entry(LoginFrame, font=('times new roman', 16), textvariable=PASSWORD_LOGIN, width=20, show="*")
+   password.place(relx=0.6, rely=0.5, anchor=CENTER)
+
+
+   btn_login = Button(LoginFrame, text="Login as Admin", font=('times new roman', 20), width=20, command=Login, bg='#A52A2A',
+                      fg='white', relief='raised')
+   btn_login.bind("<Enter>", lambda e: btn_login.config(bg="#EBA743", fg="white"))
+   btn_login.bind("<Leave>", lambda e: btn_login.config(bg="#A52A2A", fg="white"))
+   btn_login.place(relx=0.5, rely=0.7, anchor=CENTER)
+
+
+   lbl_text = Label(LoginFrame, text="Not a member?", font=('times new roman', 14, 'bold'), bg='#EEE3AD')
+   lbl_text.place(relx=0.5, rely=0.85, anchor=CENTER)
+
+
+   lbl_register = Label(LoginFrame, text="Register Now", fg="#A52A2A", font=('arial', 12, 'bold'), bg='#EEE3AD')
+   lbl_register.bind('<Enter>', lambda event, label=lbl_register: label.config(font=('arial', 12, 'underline', 'bold')))
+   lbl_register.bind('<Leave>', lambda event, label=lbl_register: label.config(font=('arial', 12, 'bold')))
+   lbl_register.bind('<Button-1>', ToggleToRegister)
+   lbl_register.place(relx=0.5, rely=0.9, anchor=CENTER)
+
+
+def RegisterFormAdmin():
+   global RegisterFrame, lbl_result2, confirm_password_entry
+   RegisterFrame = Frame(login_register_frame)
+   RegisterFrame.config(bg='#EEE3AD')
+   RegisterFrame.place(relx=0.5, rely=0.5, anchor=CENTER, width=500, height=400)
+
+
+   lbl_result2 = Label(RegisterFrame, text="Register:", font=('times new roman', 25, 'bold'), bd=18, bg='#EEE3AD', fg='#A52A2A')
+   lbl_result2.place(relx=0.5, rely=0.2, anchor=CENTER)
+
+
+   lbl_username = Label(RegisterFrame, text="Username:", font=('times new roman', 16), bd=18,bg='#EEE3AD')
+   lbl_username.place(relx=0.2, rely=0.4, anchor=CENTER)
+
+
+   lbl_password = Label(RegisterFrame, text="Password:", font=('times new roman', 16), bd=18, bg='#EEE3AD')
+   lbl_password.place(relx=0.2, rely=0.5, anchor=CENTER)
+
+
+   lbl_confirm_password = Label(RegisterFrame, text="Confirm Password:", font=('times new roman', 16), bd=18, bg='#EEE3AD')
+   lbl_confirm_password.place(relx=0.2, rely=0.6, anchor=CENTER)
+
+
+   username = Entry(RegisterFrame, font=('times new roman', 16), textvariable=USERNAME_REGISTER, width=20)
+   username.place(relx=0.6, rely=0.4, anchor=CENTER)
+
+
+   password = Entry(RegisterFrame, font=('times new roman', 16), textvariable=PASSWORD_REGISTER, width=20, show="*")
+   password.place(relx=0.6, rely=0.5, anchor=CENTER)
+
+
+   confirm_password_entry = Entry(RegisterFrame, font=('times new roman', 16), width=20, show="*")
+   confirm_password_entry.place(relx=0.6, rely=0.6, anchor=CENTER)
+
+
+   btn_login = Button(RegisterFrame, text="Register as Admin", font=('times new roman', 20), width=20, command=Register, bg='#A52A2A',
+                      fg='white', relief='raised')
+   btn_login.bind("<Enter>", lambda e: btn_login.config(bg="#EBA743", fg="white"))
+   btn_login.bind("<Leave>", lambda e: btn_login.config(bg="#A52A2A", fg="white"))
+   btn_login.place(relx=0.5, rely=0.8, anchor=CENTER)
+
+
+   lbl_login = Label(RegisterFrame, text="Click to Login", fg="#A52A2A", font=('arial', 12, 'bold'),bg='#EEE3AD')
+   lbl_login.bind('<Enter>', lambda event, label=lbl_login: label.config(font=('arial', 12, 'underline', 'bold')))
+   lbl_login.bind('<Leave>', lambda event, label=lbl_login: label.config(font=('arial', 12, 'bold')))
+   lbl_login.bind('<Button-1>', ToggleToLogin)
+   lbl_login.place(relx=0.5, rely=0.95, anchor=CENTER)
+
+
+
+
+def ToggleToLogin(event=None):  # switching from register to login page.
+   if RegisterFrame is not None:
+       RegisterFrame.destroy()
+   LoginFormAdmin()
+
+
+
+
+def ToggleToRegister(event=None):  # switching the interface from login to register after user click the register link
+   if LoginFrame is not None:  # if login form is display, then need to deleted and switch to registration form
+       LoginFrame.destroy()
+   RegisterFormAdmin()
+
+
+
+
+def Register():
+   Database()
+   if USERNAME_REGISTER.get() == "" or PASSWORD_REGISTER.get() == "":
+       messagebox.showerror("Error", "Please complete all the required fields!")
+   elif PASSWORD_REGISTER.get() != confirm_password_entry.get():
+       messagebox.showerror("Error", "Password and Confirm Password do not match!")
+   else:
+       try:
+           cursor.execute("SELECT * FROM `admin` WHERE `username` = ?", (USERNAME_REGISTER.get(),))
+           if cursor.fetchone() is not None:
+               messagebox.showerror("Error", "Username is already taken!")
+           else:
+               cursor.execute(
+                   "INSERT INTO `admin` (username, password) VALUES(?,?)",
+                   (str(USERNAME_REGISTER.get()), str(PASSWORD_REGISTER.get()))
+               )
+               conn.commit()  # save current data to database
+               USERNAME_REGISTER.set("")
+               PASSWORD_REGISTER.set("")
+               confirm_password_entry.delete(0, 'end')  # Clear confirm password field
+               messagebox.showinfo("Success", "You Successfully Registered. Click to Login")
+       except sqlite3.Error as e:
+           messagebox.showerror("Error", "Error occurred during registration: {}".format(e))
+
+
+
+
+def Login():
+   Database()
+   if USERNAME_LOGIN.get() == "" or PASSWORD_LOGIN.get() == "":
+       messagebox.showerror("Error", "Please complete the required field!")
+   else:
+       cursor.execute("SELECT * FROM `admin` WHERE `username` = ? and `password` = ?",
+                      (USERNAME_LOGIN.get(), PASSWORD_LOGIN.get()))
+       if cursor.fetchone() is not None:
+           messagebox.showinfo("Success", "You Successfully Login")
+           login_register_frame.destroy()
+           LoginFrame.destroy()
+           food_Dash()  # Call Home function after successful login
+       else:
+           messagebox.showerror("Error", "Invalid Username or password")
+
+
+LoginFormAdmin()
+root.mainloop()
+
+
+
