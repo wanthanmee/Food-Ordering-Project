@@ -1,0 +1,160 @@
+#File: Customer_Login_3
+
+
+def Database():  # creating connection to database and creating table
+  global conn, cursor
+  conn = sqlite3.connect("db_thewok1.db")
+  conn.execute("PRAGMA busy_timeout = 30000")  # wait for 30 seconds if the database is locked
+  conn.execute("PRAGMA journal_mode = WAL")  # enable WAL mode
+
+
+
+
+  cursor = conn.cursor()
+  cursor.execute(
+	#Table: ‘customer’
+      "CREATE TABLE IF NOT EXISTS `customer` (cust_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, username TEXT, "
+      "password TEXT, fullname TEXT, email TEXT, phone_no TEXT)")
+
+
+
+
+	#Table: ‘visiting’
+  cursor.execute("""
+      CREATE TABLE IF NOT EXISTS visiting (
+      visit_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      cust_id INTEGER,
+      table_no INTEGER,
+      FOREIGN KEY (cust_id) REFERENCES customer(cust_id)
+      )
+  """)
+
+
+
+
+  conn.commit()
+
+____________________________________________________________________________
+
+#File: Admin_OrderManagement_2
+
+
+def Database():
+   global conn, cursor
+
+
+   conn = sqlite3.connect("db_thewok1.db")
+   cursor = conn.cursor()
+
+
+     try:
+       cursor = conn.cursor()
+
+
+       # Table: ‘orders’
+       cursor.execute('''
+           CREATE TABLE IF NOT EXISTS orders (
+               order_id TEXT PRIMARY KEY,
+               visit_id INT,
+               total_price REAL,
+               order_status TEXT,
+               bill_number INT AUTOINCREMENT,
+               FOREIGN KEY (visit_id) REFERENCES visiting(visit_id)
+           )
+       ''')
+
+
+       # Table: ‘order_items’
+       cursor.execute('''
+           CREATE TABLE IF NOT EXISTS order_items (
+               order_items_id INTEGER PRIMARY KEY AUTOINCREMENT,
+               order_id TEXT,
+               item_id TEXT,
+               item_name TEXT,
+               quantity INTEGER,
+               price REAL,
+               remarks TEXT,
+               FOREIGN KEY (order_id) REFERENCES orders (order_id),
+               FOREIGN KEY (item_id) REFERENCES items (item_id)
+           )
+       ''')
+
+
+       conn.commit()
+       print("Tables created successfully")
+   except sqlite3.Error as e:
+       print(f"Database error: {e}")
+   finally:
+       if conn:
+           conn.close()
+ 
+____________________________________________________________________________
+
+#File: Admin Main
+def Database():
+   global conn, cursor
+   conn = sqlite3.connect('db_thewok1.db')
+   cursor = conn.cursor()
+
+
+	#Table: ‘items’
+   cursor.execute("""
+       CREATE TABLE IF NOT EXISTS items(
+       item_id TEXT PRIMARY KEY,
+       item_name TEXT NOT NULL,
+       item_category TEXT NOT NULL,
+       item_description TEXT NOT NULL,
+       item_price  REAL NOT NULL,
+       item_calories REAL NOT NULL,
+       item_image_path TEXT NOT NULL
+       )
+   """)
+	#Table: ‘item_category_sequences’
+   cursor.execute("""
+       CREATE TABLE IF NOT EXISTS item_category_sequences(
+       item_category TEXT PRIMARY KEY,
+       current_id INTEGER NOT NULL
+       )
+   """)
+   conn.commit()
+
+____________________________________________________________________________
+
+#File: Customer Reviews 5
+def Database():
+  global conn, cursor
+  conn = sqlite3.connect("db_thewok1.db")
+  conn.execute("PRAGMA busy_timeout = 30000")  # wait for 30 seconds if the database is locked
+  conn.execute("PRAGMA journal_mode = WAL")  # enable WAL mode
+
+
+  cursor = conn.cursor()
+  cursor.execute(
+	#Table: ‘reviews’
+      "CREATE TABLE IF NOT EXISTS reviews(review_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, customer_rating INTEGER NOT NULL, customer_review TEXT NOT NULL, cust_id INT, FOREIGN KEY (cust_id) REFERENCES customer(cust_id))"
+  )
+  conn.commit()
+
+____________________________________________________________________________
+
+#File: Customer Table Reservation
+def create_reservations_table(conn):
+   try:
+       cursor = conn.cursor()
+	#Table: ‘reservations’
+       cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reservations (
+                reservation_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                reservation_pax INTEGER NOT NULL,
+                reservation_date TEXT NOT NULL,
+                reservation_time TEXT NOT NULL,
+                reservation_comments TEXT,
+                cust_id INTEGER,
+                FOREIGN KEY (cust_id) REFERENCES customer(cust_id)
+            )
+        """)
+       conn.commit()
+       cursor.close()
+   except sqlite3.Error as e:
+       print(f"An error occurred: {e}")
+
