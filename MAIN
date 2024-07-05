@@ -1,0 +1,31 @@
+import tkinter as tk
+import subprocess
+import sys
+import os
+
+def main_chat_page():
+    root.destroy()
+    if sys.platform == "win32":
+        subprocess.Popen(["start", "cmd", "/k", "python", "Use_Main_Chat.py"], shell=True)
+    else:
+        subprocess.Popen(["x-terminal-emulator", "-e", "python3", "Use_Main_Chat.py"])
+
+def register_admin_page():
+    root.destroy()
+    if sys.platform == "win32":
+        subprocess.Popen(["start", "cmd", "/k", "python", "RegisterAdmin.py"], shell=True)
+    else:
+        subprocess.Popen(["x-terminal-emulator", "-e", "python3", "RegisterAdmin.py"])
+
+root = tk.Tk()
+root.title("Main Menu")
+root.geometry("1920x1080")
+root.configure(bg='azure')
+
+customer_button = tk.Button(root, text="Login as Customer", font=("Arial", 20, "bold"), command=main_chat_page, background='brown', fg='light yellow')
+customer_button.place(x=960, y=350, anchor='center')
+
+admin_button = tk.Button(root, text="Login as Admin", font=("Arial", 20, "bold"), command=register_admin_page, background='light yellow', fg='brown')
+admin_button.place(x=960, y=550, anchor='center')
+
+root.mainloop()
