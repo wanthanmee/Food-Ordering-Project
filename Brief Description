@@ -1,0 +1,16 @@
+Our project is to do an online food ordering system. 
+
+The library need to download and import includes:
+- import re
+- import itertools
+- import ast
+- import request
+- import json
+- import FPDF
+- import pygame
+- import mutagen.mp3
+
+We are using the MAIN to run all the code. The code te be run includes the code for Customer GUI and Admin GUI. 
+If you clicked on “Login As Customer”, the customer login/ register will display on your screen. On the other hand, if you clicked on “Login As Admin”, the admin login/ register will display on your screen.
+
+The features involved in our online food ordering system are food menu, order cart, review page, page for reservation, chat assistant and mini game. For the chat assistant, there are limited token to use since we using the free version API.
