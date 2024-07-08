@@ -6,7 +6,7 @@ The library need to download and import includes:
 - import re
 - import itertools
 - import ast
-- import request
+- import requests
 - import json
 - import FPDF
 - import pygame
